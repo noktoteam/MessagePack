@@ -4,6 +4,18 @@ import Foundation
 let NSEC_PER_SEC: UInt64 = 1000000000
 #endif
 
+
+public let fractionalISODecoder: ISO8601DateFormatter = {
+    let decoder = ISO8601DateFormatter.init()
+    decoder.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return decoder
+}()
+public  let wholeISODecoder: ISO8601DateFormatter = {
+    let decoder = ISO8601DateFormatter.init()
+    decoder.formatOptions = [.withInternetDateTime]
+    return decoder
+}()
+
 extension _MessagePackDecoder {
     final class SingleValueContainer {
         var codingPath: [CodingKey]
@@ -157,34 +169,19 @@ extension _MessagePackDecoder.SingleValueContainer: SingleValueDecodingContainer
     }
     
     func decode(_ type: Date.Type) throws -> Date {
-        let format = try readByte()
-        
-        var seconds: TimeInterval
-        var nanoseconds: TimeInterval
-        
-        switch format {
-        case 0xd6:
-            _ = try read(Int8.self) // -1
-            nanoseconds = 0
-            seconds = TimeInterval(try read(UInt32.self))
-        case 0xd7:
-            _ = try read(Int8.self) // -1
-            let bitPattern = try read(UInt64.self)
-            nanoseconds = TimeInterval(UInt32(bitPattern >> 34))
-            seconds = TimeInterval(UInt32(bitPattern & 0x03_FF_FF_FF_FF))
-        case 0xc7:
-            _ = try read(Int8.self) // 12
-            _ = try read(Int8.self) // -1
-            nanoseconds = TimeInterval(try read(UInt32.self))
-            seconds = TimeInterval(try read(Int64.self))
-        default:
-            let context = DecodingError.Context(codingPath: self.codingPath, debugDescription: "Invalid format: \(format)")
-            throw DecodingError.typeMismatch(Date.self, context)
+        let rawValue = try decode(String.self)
+        if let parsed = fractionalISODecoder.date(from: rawValue) {
+            return parsed
+        } else if let parsed = wholeISODecoder.date(from: rawValue) {
+            return parsed
+        } else {
+            throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                            codingPath: codingPath,
+                            debugDescription: "Invalid date string."
+                    )
+            )
         }
-        
-        let timeInterval = TimeInterval(seconds) + nanoseconds / Double(NSEC_PER_SEC)
-        
-        return Date(timeIntervalSince1970: timeInterval)
     }
     
     func decode(_ type: Data.Type) throws -> Data {

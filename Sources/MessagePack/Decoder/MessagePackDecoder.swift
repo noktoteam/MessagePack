@@ -5,7 +5,8 @@ import Foundation
  */
 final public class MessagePackDecoder {
     public init() {}
-    
+
+
     /**
      A dictionary you use to customize the decoding process
      by providing contextual information.
